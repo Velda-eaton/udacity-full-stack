@@ -13,3 +13,8 @@ ehthumbs.db
 Thumbs.db
 
 .github/**
+
+
+# added files #
+######################
+node_modules/
