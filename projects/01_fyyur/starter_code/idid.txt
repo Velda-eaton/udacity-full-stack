@@ -1,0 +1,25 @@
+set up venv
+    python -m venv venv
+
+run venv   
+    source venv/Scripts/activate
+
+connect to db
+    - update the config file
+
+Installed:
+    pip install Flask-Migrate
+    pip install psycopg2
+
+Initate the db:
+    flask db init
+    flask db migrate - create migrate file
+    flask db upgrade - actually run the migrate
+    flask db downgrade - undo the changes
+
+Go through and make sure that the db tables have all you need.
+
+
+
+Notes: I think it is bad practice to have capital letters in table names.  
+Table names should be plural too.
