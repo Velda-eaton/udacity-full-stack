@@ -13,6 +13,9 @@ import logging
 from logging import Formatter, FileHandler
 from flask_wtf import Form
 from forms import *
+import string
+import sys
+from datetime import datetime
 #----------------------------------------------------------------------------#
 # App Config.
 #----------------------------------------------------------------------------#
@@ -44,8 +47,7 @@ class Venue(db.Model):
     genres = db.Column(db.ARRAY(db.String(120)))
     seeking_talent = db.Column(db.Boolean, nullable=False, default=False )
     seeking_description = db.Column(db.String(1000))
-    show_id = db.Column(db.Integer, db.ForeignKey('Show.id'))
-    # TODO: implement any missing fields, as a database migration using Flask-Migrate
+    venue_id = db.relationship('Show',backref=db.backref('Venues', cascade='all, delete'), lazy=True)
 
 class Artist(db.Model):
     __tablename__ = 'Artist'
@@ -61,17 +63,15 @@ class Artist(db.Model):
     facebook_link = db.Column(db.String(120))
     seeking_venue = db.Column(db.Boolean, nullable=False, default=False )
     seeking_description = db.Column(db.String(1000))
-    show_id = db.Column(db.Integer, db.ForeignKey('Show.id'))
-    # TODO: implement any missing fields, as a database migration using Flask-Migrate
-
-class Shows(db.Model):
+    artist_id = db.relationship('Show',backref=db.backref('Artist', cascade='all, delete'), lazy=True)
+    
+class Show(db.Model):
     __tablename__ = 'Show'
 
     id = db.Column(db.Integer, primary_key=True)
     start_time = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    venue_id = db.relationship('Venue',backref=db.backref('shows', cascade='all, delete'), lazy=True)
-    artist_id = db.relationship('Artist',backref=db.backref('shows', cascade='all, delete'), lazy=True)
-# TODO Implement Show and Artist models, and complete all model relationships and properties, as a database migration.
+    venue_id = db.Column(db.Integer, db.ForeignKey('Venue.id'))
+    artist_id = db.Column(db.Integer, db.ForeignKey('Artist.id'))
 
 #----------------------------------------------------------------------------#
 # Filters.
@@ -235,12 +235,84 @@ def create_venue_form():
 
 @app.route('/venues/create', methods=['POST'])
 def create_venue_submission():
-  # TODO: insert form data as a new Venue record in the db, instead
-  # TODO: modify data to be the data object returned from db insertion
+  error = False
+  isDuplicate = True
+  errMessage = ""
 
-  # on successful db insert, flash success
-  flash('Venue ' + request.form['name'] + ' was successfully listed!')
-  # TODO: on unsuccessful db insert, flash an error instead.
+  try:
+    name = request.form["name"]
+    city = request.form["city"]
+    state = request.form["state"]
+    address = request.form["address"]
+    phone = request.form["phone"].translate(str.maketrans('','',string.punctuation))
+    image_link = request.form["image_link"]
+    website =  request.form["website_link"]
+    facebook_link = request.form["facebook_link"]
+    genres = request.form.getlist("genres")
+    if "seeking_talent" in request.form:      
+      seeking_talent = True
+      seeking_description = request.form["seeking_description"]
+    else:
+      seeking_talent = False
+      seeking_description = ""
+
+    # Validate the entries
+    # I'm presuming that the venue name, website and fb pages, if enetered,  must be unique.
+    isDuplicate=bool(Venue.query.filter_by(name=name).first())
+    if isDuplicate == True:
+      errMessage += " The venue is already in the database."
+    
+    if website != '' and isDuplicate == False:
+      isDuplicate=bool(Venue.query.filter_by(website=website).first())
+      if isDuplicate == True:
+        errMessage += " The website is already in the database."
+    
+    if facebook_link != '' and isDuplicate == False:
+      isDuplicate=bool(Venue.query.filter_by(facebook_link=facebook_link).first())
+      if isDuplicate == True:
+        errMessage += " The facebook link is already in the database."
+
+    validPhone = True
+    if len(phone) != 10 or phone.isnumeric == False: 
+      validPhone = False
+      errMessage += " Invalid phone number."
+
+    if isDuplicate == False and validPhone:
+      venue = Venue(
+        name = name,
+        city = city,
+        state = state,
+        address = address,
+        phone = phone,
+        image_link = image_link,
+        website =  website,
+        facebook_link = facebook_link,
+        genres = genres,
+        seeking_talent = seeking_talent,
+        seeking_description = seeking_description)
+      db.session.add(venue)
+      db.session.commit()
+    else:
+      # TODO: Nice to have, make the error message appear on the screen instead of redirecting
+      error=True
+  except:
+      db.session.rollback()
+      error=True
+      print(sys.exc_info())
+  finally:
+      db.session.close()
+
+  if error:
+    flash('An error occurred. Venue ' + name + ' could not be listed.' + errMessage)
+  else:
+    flash('Venue ' + name + ' was successfully listed!')
+
+  # DONE: insert form data as a new Venue record in the db, instead
+  # DONE: modify data to be the data object returned from db insertion
+
+  # DONE: on successful db insert, flash success
+  # flash('Venue ' + request.form['name'] + ' was successfully listed!')
+  # DONE: on unsuccessful db insert, flash an error instead.
   # e.g., flash('An error occurred. Venue ' + data.name + ' could not be listed.')
   # see: http://flask.pocoo.org/docs/1.0/patterns/flashing/
   return render_template('pages/home.html')
@@ -258,37 +330,28 @@ def delete_venue(venue_id):
 #  ----------------------------------------------------------------
 @app.route('/artists')
 def artists():
-  # TODO: replace with real data returned from querying the database
-  data=[{
-    "id": 4,
-    "name": "Guns N Petals",
-  }, {
-    "id": 5,
-    "name": "Matt Quevedo",
-  }, {
-    "id": 6,
-    "name": "The Wild Sax Band",
-  }]
+  data = []
+  for artist in Artist.query.order_by('name'):
+    data.append({"id": artist.id,"name": artist.name})
   return render_template('pages/artists.html', artists=data)
 
 @app.route('/artists/search', methods=['POST'])
 def search_artists():
-  # TODO: implement search on artists with partial string search. Ensure it is case-insensitive.
-  # seach for "A" should return "Guns N Petals", "Matt Quevado", and "The Wild Sax Band".
-  # search for "band" should return "The Wild Sax Band".
+  searchStr = request.form['search_term'] 
+  data = []
+  for artist in Artist.query.filter(Artist.name.ilike('%'+searchStr+'%')).order_by('name'):
+    data.append({"id": artist.id,"name": artist.name})
+  
   response={
-    "count": 1,
-    "data": [{
-      "id": 4,
-      "name": "Guns N Petals",
-      "num_upcoming_shows": 0,
-    }]
+    "count": len(data),
+    "data": data
   }
   return render_template('pages/search_artists.html', results=response, search_term=request.form.get('search_term', ''))
 
 @app.route('/artists/<int:artist_id>')
 def show_artist(artist_id):
   # shows the artist page with the given artist_id
+  # velda this is where you are 
   # TODO: replace with real artist data from the artist table, using artist_id
   data1={
     "id": 4,
@@ -429,13 +492,80 @@ def create_artist_form():
 @app.route('/artists/create', methods=['POST'])
 def create_artist_submission():
   # called upon submitting the new artist listing form
-  # TODO: insert form data as a new Venue record in the db, instead
-  # TODO: modify data to be the data object returned from db insertion
+  error = False
+  isDuplicate = True
+  errMessage = ""
+  try:
+    name = request.form["name"]
+    genres = request.form.getlist("genres")
+    city = request.form["city"]
+    state = request.form["state"]
+    phone = request.form["phone"].translate(str.maketrans('','',string.punctuation))
+    website =  request.form["website_link"]
+    facebook_link = request.form["facebook_link"]
+    image_link = request.form["image_link"]
+    if "seeking_venue" in request.form:      
+      seeking_venue = True
+      seeking_description = request.form["seeking_description"]
+    else:
+      seeking_venue = False
+      seeking_description = ""
+
+    # Validate the entries
+    # I'm presuming that the artist name, website and fb pages, if enetered,  must be unique.
+    isDuplicate=bool(Artist.query.filter_by(name=name).first())
+    print(isDuplicate)
+    if isDuplicate == True:
+      errMessage += " The artist is already in the database."
+    
+    if website != '' and isDuplicate == False:
+      isDuplicate=bool(Artist.query.filter_by(website=website).first())
+      if isDuplicate == True:
+        errMessage += " The website is already in the database."
+    print(isDuplicate)
+    if facebook_link != '' and isDuplicate == False:
+      isDuplicate=bool(Artist.query.filter_by(facebook_link=facebook_link).first())
+      if isDuplicate == True:
+        errMessage += " The facebook link is already in the database."
+
+    print(isDuplicate)
+    validPhone = True
+    if len(phone) != 10 or phone.isnumeric == False: 
+      validPhone = False
+      errMessage += " Invalid phone number."
+
+    if isDuplicate == False and validPhone:
+      artist = Artist(
+        name = name,
+        genres = genres,
+        city = city,
+        state = state,
+        phone = phone,
+        image_link = image_link,
+        website =  website,
+        facebook_link = facebook_link,
+        seeking_venue = seeking_venue,
+        seeking_description = seeking_description)
+      db.session.add(artist)
+      db.session.commit()
+
+      newArtist = Artist.query.filter_by(name=name).first()
+    else:
+      # TODO: Nice to have, make the error message appear on the screen instead of redirecting
+      error=True
+  except:
+      db.session.rollback()
+      error=True
+      print(sys.exc_info())
+  finally:
+      db.session.close()
 
   # on successful db insert, flash success
-  flash('Artist ' + request.form['name'] + ' was successfully listed!')
-  # TODO: on unsuccessful db insert, flash an error instead.
-  # e.g., flash('An error occurred. Artist ' + data.name + ' could not be listed.')
+  if error:
+    flash('An error occurred. Artist ' + name + ' could not be listed.' + errMessage)
+  else:
+    flash('Artist ' + request.form['name'] + ' was successfully listed! ID:' + str(newArtist.id))
+
   return render_template('pages/home.html')
 
 
@@ -492,14 +622,44 @@ def create_shows():
 
 @app.route('/shows/create', methods=['POST'])
 def create_show_submission():
+  print(request.form)
   # called to create new shows in the db, upon submitting new show listing form
-  # TODO: insert form data as a new Show record in the db, instead
+  error = False
+  isDuplicate = True
+  errMessage = ""
+  try:
+    venue_id = request.form["venue_id"]
+    artist_id = request.form["artist_id"]
+    start_time = datetime.strptime(request.form["start_time"], '%Y-%m-%d %H:%M:%S')
+
+    # Validate that this is not a duplicate
+    isDuplicate=bool(Show.query.filter_by(venue_id=venue_id,artist_id = artist_id,start_time = start_time).first())
+    if isDuplicate == True:
+      errMessage += " The show is already in the database."
+
+    if isDuplicate == False:
+      show = Show(
+        venue_id = venue_id,
+        artist_id = artist_id,
+        start_time = start_time)
+      db.session.add(show)
+      db.session.commit()
+    else:
+      error=True
+  except:
+      db.session.rollback()
+      error=True
+      print(sys.exc_info())
+  finally:
+      db.session.close()
 
   # on successful db insert, flash success
-  flash('Show was successfully listed!')
-  # TODO: on unsuccessful db insert, flash an error instead.
-  # e.g., flash('An error occurred. Show could not be listed.')
+  if error:
+    flash('An error occurred. Show could not be listed.' + errMessage)
+  else:
+    flash('Show was successfully listed!')
   # see: http://flask.pocoo.org/docs/1.0/patterns/flashing/
+
   return render_template('pages/home.html')
 
 @app.errorhandler(404)
