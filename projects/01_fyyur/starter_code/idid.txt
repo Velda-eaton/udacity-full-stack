@@ -18,7 +18,7 @@ Initate the db:
     flask db downgrade - undo the changes
 
 Go through and make sure that the db tables have all you need.
-
+Get new venue working and updating the database.
 
 
 Notes: I think it is bad practice to have capital letters in table names.  

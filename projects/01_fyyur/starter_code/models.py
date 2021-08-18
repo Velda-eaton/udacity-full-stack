@@ -16,6 +16,8 @@ migrate = Migrate(app, db)
 
 #----------------------------------------------------------------------------#
 # Models.
+# Notes: I think it is bad practice to have capital letters in table names.  
+# Table names should be plural too.
 #----------------------------------------------------------------------------#
 
 class Venue(db.Model):
@@ -67,3 +69,9 @@ class Show(db.Model):
 
     def __repr__(self):
       return f'<Show {self.id} {self.start_time} {self.venue_id} {self.artist_id}>'
+
+class StateVenues:
+  def __init__(self, city, state):
+    self.city = city
+    self.state = state
+    self.venues = []

@@ -35,15 +35,9 @@ app.jinja_env.filters['datetime'] = format_datetime
 @app.route('/')
 def index():
   return render_template('pages/home.html')
-
-
+  
 #  Venues
 #  ----------------------------------------------------------------
-class StateVenues:
-  def __init__(self, city, state):
-    self.city = city
-    self.state = state
-    self.venues = []
 
 @app.route('/venues')
 def venues():
