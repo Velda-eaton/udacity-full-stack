@@ -18,3 +18,5 @@ Thumbs.db
 # added files #
 ######################
 node_modules/
+*.zip
+Trivia_api_submission/
