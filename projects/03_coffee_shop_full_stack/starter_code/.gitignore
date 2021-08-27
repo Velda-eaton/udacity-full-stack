@@ -3,6 +3,13 @@ venv/
 __pycache__/
 test.db
 
+# added files #
+######################
+node_modules/
+.env
+*.zip
+coffee_shop_submission/
+
 # OS generated files #
 ######################
 .DS_Store
